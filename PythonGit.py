@@ -1,65 +1,62 @@
-import cv2 # pyright: ignore[reportMissingImports]
-import numpy as np # pyright: ignore[reportMissingImports]
+import cv2 # type: ignore
+import numpy as np # type: ignore
 
-def advanced_kaleidoscope(image_path, num_segments=6, output_path='advanced_kaleido.jpg'):
-    """
-    Создает калейдоскоп с автоматическим определением центра по границам.
-    """
-    img = cv2.imread(image_path)
-    if img is None:
-        print("Ошибка загрузки изображения")
-        return
-    
-    height, width = img.shape[:2]
-    
-    # 1. Определяем область с наибольшей концентрацией границ
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
-    
-    # Скользящее окно 11x11 для поиска максимума границ [citation:2]
-    window_size = 11
-    max_edges = 0
-    best_center = (width // 2, height // 2)
-    
-    for y in range(0, height - window_size, window_size):
-        for x in range(0, width - window_size, window_size):
-            window = edges[y:y+window_size, x:x+window_size]
-            edge_count = np.sum(window)
-            if edge_count > max_edges:
-                max_edges = edge_count
-                best_center = (x + window_size//2, y + window_size//2)
-    
-    # 2. Смещаем изображение так, чтобы центр оказался в центре кадра
-    M = np.float32([[1, 0, width//2 - best_center[0]],
-                    [0, 1, height//2 - best_center[1]]])
-    centered = cv2.warpAffine(img, M, (width, height))
-    
-    # 3. Создаем треугольный сегмент
-    center = (width // 2, height // 2)
-    angle_step = 360 // num_segments
-    
-    # Маска для одного сегмента (60° для 6 сегментов)
-    mask = np.zeros((height, width), dtype=np.uint8)
-    triangle_points = np.array([
-        center,
-        (width, height),
-        (width, 0)
-    ], np.int32)
-    cv2.fillPoly(mask, [triangle_points], 255)
-    
-    # 4. Вырезаем сегмент и создаем вращающиеся копии
-    segment = cv2.bitwise_and(centered, centered, mask=mask)
-    
-    kaleidoscope = np.zeros_like(img)
-    for i in range(num_segments):
-        M_rot = cv2.getRotationMatrix2D(center, i * angle_step, 1.0)
-        rotated = cv2.warpAffine(segment, M_rot, (width, height))
-        kaleidoscope = cv2.add(kaleidoscope, rotated)
-    
-    cv2.imwrite(output_path, kaleidoscope)
-    cv2.imshow('Advanced Kaleidoscope', kaleidoscope)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+print("=" * 60)
+print("🎨 ЗАПУСК ГЕНЕРАТОРА КАЛЕЙДОСКОПА")
+print("=" * 60)
 
-# Использование
-advanced_kaleidoscope('input.jpg', num_segments=8)
+# Создаем тестовое изображение
+print("\n⏳ Создание узора...")
+size = 400
+pattern = np.zeros((size, size, 3), dtype=np.uint8)
+
+np.random.seed(42)
+for i in range(50):
+    color = (np.random.randint(0, 255), 
+            np.random.randint(0, 255), 
+            np.random.randint(0, 255))
+    center = (np.random.randint(0, size), np.random.randint(0, size))
+    radius = np.random.randint(10, 100)
+    cv2.circle(pattern, center, radius, color, -1)
+
+print("✅ Узор создан")
+
+# Создаем калейдоскоп
+print("⏳ Обработка калейдоскопа...")
+h, w = pattern.shape[:2]
+center = (w // 2, h // 2)
+result = np.zeros_like(pattern)
+segments = 8
+sector_angle = 360 // segments
+
+for i in range(segments):
+    angle = i * sector_angle
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(pattern, M, (w, h))
+    
+    mask = np.zeros((h, w), dtype=np.uint8)
+    pts = [center]
+    for a in range(angle - sector_angle//2, angle + sector_angle//2 + 1, 5):
+        rad = np.radians(a)
+        x = int(center[0] + max(w, h) * np.cos(rad))
+        y = int(center[1] + max(w, h) * np.sin(rad))
+        pts.append((x, y))
+    pts = np.array(pts, dtype=np.int32)
+    cv2.fillPoly(mask, [pts], 255)
+    
+    result[mask == 255] = rotated[mask == 255]
+
+print("✅ Калейдоскоп создан")
+
+# Сохраняем
+cv2.imwrite("kaleidoscope_output.png", result)
+cv2.imwrite("original.png", pattern)
+
+print("\n" + "=" * 60)
+print("✅ ГОТОВО!")
+print("=" * 60)
+print("📁 Файлы сохранены:")
+print("   • original.png")
+print("   • kaleidoscope_output.png")
+print("\n👉 Откройте файл kaleidoscope_output.png из папки!")
+print("=" * 60)
