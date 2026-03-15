@@ -6,42 +6,43 @@ WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
 @app.route('/') 
 def index(): 
  return render_template('index.html') 
-@app.route('/weather', methods=['GET']) 
-def get_weather(): 
+
+@app.route('/forecast') 
+def get_forecast(): 
     try: 
-        latitude = request.args.get('lat', default=55.7558, type=float) # Москва по умолчанию 
+        latitude = request.args.get('lat', default=55.7558, type=float) 
         longitude = request.args.get('lon', default=37.6173, type=float) 
         
         params = { 
         'latitude': latitude, 
         'longitude': longitude, 
-        'current_weather': True, 
-        'timezone': 'auto' 
+        'daily': 'temperature_2m_max,temperature_2m_min,weathercode', 
+        'timezone': 'auto', 
+        'forecast_days': 7 
         } 
         
         response = requests.get(WEATHER_API_URL, params=params) 
         response.raise_for_status() 
         
-        weather_data = response.json() 
+        forecast_data = response.json() 
+        daily = forecast_data.get('daily', {}) 
+        forecast_days = [] 
+        for i in range(min(7, len(daily.get('time', [])))): 
+            forecast_days.append({ 
+                'date': daily['time'][i], 
+                'temp_max': daily['temperature_2m_max'][i], 
+                'temp_min': daily['temperature_2m_min'][i], 
+                'weathercode': daily['weathercode'][i], 
+                'description': get_weather_description(daily['weathercode'][i]) 
+                }) 
         
-        current = weather_data.get('current_weather', {}) 
+        return render_template('forecast.html', 
+            forecast=forecast_days, 
+            latitude=latitude, 
+            longitude=longitude) 
         
-        weather_info = { 
-        'temperature': current.get('temperature', 'N/A'), 
-        'windspeed': current.get('windspeed', 'N/A'), 
-        'winddirection': current.get('winddirection', 'N/A'), 
-        'weathercode': current.get('weathercode', 'N/A'), 
-        'latitude': latitude, 
-        'longitude': longitude 
-        } 
-        weather_info['description'] = get_weather_description(weather_info['weathercode']) 
-        
-        return render_template('weather.html', weather=weather_info) 
-        
-    except requests.exceptions.RequestException as e: 
-        return render_template('error.html', error=str(e)), 500 
     except Exception as e: 
-        return render_template('error.html', error="Непредвиденная ошибка"), 500 
+        return render_template('error.html', error=str(e)), 500
 def get_weather_description(code): 
  weather_codes = { 
  0: "Ясно", 
